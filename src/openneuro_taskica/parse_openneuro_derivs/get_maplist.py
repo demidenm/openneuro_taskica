@@ -56,32 +56,57 @@ def find_contrast_files(
     study_roots: Mapping[str, Union[str, Path]],
     contrasts: Mapping[str, Mapping[str, str]],
     stat: str = "effect",
-    node: str = "node-subjectLevel",
+    node: Union[str, List[str]] = None,
 ) -> Dict[Tuple[str, str], List[str]]:
-    """Find stat maps for a contrast specified per study and per task.
-
-    Searches only ``<study_root>/task-<task>/<node>``, which avoids walking
-    the whole study tree.
-
-    Args:
-        study_roots: Mapping ``{study_name: FitLins output directory}``.
-        contrasts: Nested mapping ``{study_name: {task_label: contrast_label}}``.
-        stat: Statistic label (value after ``stat-``), e.g. ``effect`` or ``t``.
-        node: Name of the FitLins node directory holding the maps.
-
-    Returns:
-        Mapping ``{(study, task): sorted file paths}``. Pairs whose directory
-        is missing or has no matching files are omitted.
     """
+    Find statistical maps for a selected contrast.
+
+    Parameters
+    ----------
+    node : str or list of str, optional
+        FitLins node level(s) to search.
+
+        Options:
+            "node-subjectLevel"
+            "node-runLevel"
+            "node-dataLevel"
+
+        If None, searches subjectLevel and runLevel.
+    """
+
     groups: Dict[Tuple[str, str], List[str]] = {}
+
     for study, task_contrasts in contrasts.items():
         for task, contrast in task_contrasts.items():
-            folder = Path(study_roots[study]) / f"task-{task}" / node
-            files = sorted(
-                str(f)
-                for f in folder.rglob(f"*contrast-{contrast}_*stat-{stat}_*")
-                if f.name.endswith((".nii", ".nii.gz"))
-            )
+
+            task_dir = Path(study_roots[study]) / f"task-{task}"
+
+            # Select node levels
+            if node is None:
+                nodes = [
+                    "node-subjectLevel",
+                    "node-runLevel",
+                ]
+            elif isinstance(node, str):
+                nodes = [node]
+            else:
+                nodes = list(node)
+
+            files = []
+
+            for n in nodes:
+                folder = task_dir / n
+
+                if folder.is_dir():
+                    files.extend(
+                        str(f)
+                        for f in folder.rglob(
+                            f"*contrast-{contrast}_*stat-{stat}_*"
+                        )
+                        if f.name.endswith((".nii", ".nii.gz"))
+                    )
+
             if files:
-                groups[(study, task)] = files
+                groups[(study, task)] = sorted(files)
+
     return groups
